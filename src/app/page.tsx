@@ -13,6 +13,7 @@ import {
 import { isAdmin } from "@/lib/admin";
 import { getShopCatalog } from "@/lib/products";
 import { getPaidOrderMapForBuyer } from "@/lib/orders-catalog";
+import { LogoutDialog } from "@/components/logout-dialog";
 
 import { logout } from "./logout-action";
 
@@ -57,11 +58,7 @@ export default async function ShopPage() {
                 className="rounded-full"
               />
             )}
-            <form action={logout}>
-              <Button type="submit" variant="outline" size="sm">
-                Logout
-              </Button>
-            </form>
+            <LogoutDialog logoutAction={logout} />
           </div>
         </div>
       </header>

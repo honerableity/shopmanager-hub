@@ -2,6 +2,11 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createDeposit, getDepositStatus } from "@/lib/ramashop";
+import { logPurchaseToDiscord } from "@/lib/purchase-log";
+
+// Produk di bawah harga ini dianggap gratis -- tidak perlu QRIS sama
+// sekali, order langsung dibuat berstatus "paid" (lihat createOrder).
+const FREE_PRICE_THRESHOLD_IDR = 100;
 
 export type Order = {
   id: string;
@@ -38,15 +43,26 @@ export type Order = {
  * cuma percaya validasi required di client). Untuk delivery_type lain
  * diabaikan (biarpun dikirim, tetap tidak disimpan) karena hanya
  * relevan untuk form.
+ *
+ * buyerUsername: nama Discord pembeli (session.user.name), dipakai
+ * hanya untuk log webhook -- tidak disimpan ke tabel orders.
+ *
+ * Produk dengan price_idr < Rp100 dianggap gratis: order dibuat
+ * langsung berstatus "paid" (skip pembuatan deposit QRIS sama sekali),
+ * supaya alur beli langsung ke halaman order yang sudah "selesai"
+ * alih-alih ke halaman pembayaran.
  */
 export async function createOrder(
   productId: string,
   buyerDiscordId: string,
+  buyerUsername: string,
   formResponses?: Record<string, string>
 ): Promise<{ order?: Order; error?: string }> {
   const { data: product, error: productError } = await supabaseAdmin
     .from("products")
-    .select("id, price_idr, stock, is_active, delivery_type, form_schema")
+    .select(
+      "id, name, price_idr, stock, is_active, delivery_type, form_schema, download_url, grants_whitelist"
+    )
     .eq("id", productId)
     .maybeSingle();
 
@@ -96,40 +112,99 @@ export async function createOrder(
     }
   }
 
-  let deposit;
-  try {
-    deposit = await createDeposit(product.price_idr);
-  } catch (err) {
-    return {
-      error:
-        err instanceof Error
-          ? err.message
-          : "Gagal membuat pembayaran QRIS, coba lagi.",
-    };
+  const isFree = product.price_idr < FREE_PRICE_THRESHOLD_IDR;
+
+  let order: Order;
+
+  if (isFree) {
+    // Gratis: tidak ada deposit QRIS sama sekali -- deposit_id di
+    // schema NOT NULL + unique, jadi diisi placeholder unik per order
+    // (bukan dipakai untuk apa pun, tidak pernah di-poll ke Rama Shop
+    // karena syncOrderStatus() no-op untuk order yang bukan "pending").
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        product_id: product.id,
+        buyer_discord_id: buyerDiscordId,
+        price_idr: product.price_idr,
+        deposit_id: `free-${crypto.randomUUID()}`,
+        total_amount: 0,
+        qr_image: null,
+        qr_string: null,
+        expired_at: new Date().toISOString(),
+        status: "paid",
+        paid_at: new Date().toISOString(),
+        download_url: product.download_url,
+        form_responses: formResponsesToStore,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      return { error: `Gagal menyimpan order: ${insertError.message}` };
+    }
+    order = inserted as Order;
+
+    // Kurangi stok & proses whitelist sama seperti order berbayar yang
+    // baru lunas (lihat markOrderPaid) -- produk gratis tetap ikut
+    // aturan stok/whitelist yang sama, cuma skip tahap pembayarannya.
+    if (product.stock !== null) {
+      await supabaseAdmin
+        .from("products")
+        .update({ stock: Math.max(0, product.stock - 1) })
+        .eq("id", product.id);
+    }
+    if (product.grants_whitelist) {
+      await grantWhitelistIfEligible(order);
+    }
+  } else {
+    let deposit;
+    try {
+      deposit = await createDeposit(product.price_idr);
+    } catch (err) {
+      return {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Gagal membuat pembayaran QRIS, coba lagi.",
+      };
+    }
+
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        product_id: product.id,
+        buyer_discord_id: buyerDiscordId,
+        price_idr: product.price_idr,
+        deposit_id: deposit.depositId,
+        total_amount: deposit.totalAmount,
+        qr_image: deposit.qrImage,
+        qr_string: deposit.qrString,
+        expired_at: deposit.expiredAt,
+        status: "pending",
+        form_responses: formResponsesToStore,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      return { error: `Gagal menyimpan order: ${insertError.message}` };
+    }
+    order = inserted as Order;
   }
 
-  const { data: order, error: insertError } = await supabaseAdmin
-    .from("orders")
-    .insert({
-      product_id: product.id,
-      buyer_discord_id: buyerDiscordId,
-      price_idr: product.price_idr,
-      deposit_id: deposit.depositId,
-      total_amount: deposit.totalAmount,
-      qr_image: deposit.qrImage,
-      qr_string: deposit.qrString,
-      expired_at: deposit.expiredAt,
-      status: "pending",
-      form_responses: formResponsesToStore,
-    })
-    .select()
-    .single();
+  // Log ke webhook Discord untuk SEMUA pembelian (gratis maupun yang
+  // masih menunggu pembayaran) -- supaya order form/adminprocessed
+  // bisa langsung diproses admin dari log ini.
+  await logPurchaseToDiscord({
+    buyerUsername,
+    buyerDiscordId,
+    productName: product.name,
+    deliveryType: product.delivery_type,
+    formResponses: formResponsesToStore,
+  });
 
-  if (insertError) {
-    return { error: `Gagal menyimpan order: ${insertError.message}` };
-  }
-
-  return { order: order as Order };
+  return { order };
 }
 
 /**

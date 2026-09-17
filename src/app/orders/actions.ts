@@ -43,6 +43,7 @@ export async function startCheckout(
   const { order, error } = await createOrder(
     productId,
     session.user.discordId,
+    session.user.name ?? "Unknown",
     formResponses
   );
 
