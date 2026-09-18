@@ -165,6 +165,34 @@ export async function getDeliveryTypeForProduct(
 }
 
 /**
+ * Ambil satu produk aktif untuk halaman detail publik (/product/[id]).
+ * Beda dari getAdminProductById: TIDAK butuh isAdmin(), pakai anon
+ * client, dan hanya mengembalikan produk yang is_active=true (produk
+ * nonaktif/dihapus dianggap tidak ada dari sisi pembeli) -- sama
+ * prinsip dengan getShopCatalog yang download_url-nya juga disembunyikan
+ * dari query publik ini.
+ */
+export async function getPublicProductById(
+  productId: string
+): Promise<Product | null> {
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      "id, product_type_id, name, slug, description, price_idr, image_url, stock, sort_order, grants_whitelist, delivery_type, form_schema"
+    )
+    .eq("id", productId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Gagal memuat produk: ${error.message}`);
+  }
+  if (!data) return null;
+
+  return { ...data, download_url: null };
+}
+
+/**
  * Ambil satu produk (termasuk field admin-only seperti download_url,
  * is_active) untuk halaman edit. HANYA dipanggil dari halaman/action
  * yang sudah dicek isAdmin() di server, sama seperti

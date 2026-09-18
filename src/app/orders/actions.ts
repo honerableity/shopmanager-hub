@@ -3,21 +3,26 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { createOrder, getOwnedOrder, syncOrderStatus } from "@/lib/orders";
+import { getOwnedOrder, syncOrderStatus } from "@/lib/orders";
+import { createOrderGroup, getOrdersForGroup, getOwnedOrderGroup, syncOrderGroupStatus } from "@/lib/order-groups";
 
 export type StartCheckoutState = {
   error?: string;
 };
 
 /**
- * Dipanggil saat user klik "Beli" di product card. Buat order +
- * deposit QRIS, lalu redirect ke halaman order untuk menampilkan QR
- * dan mulai polling status.
+ * Dipanggil saat user klik "Beli" di product card (beli-langsung, di
+ * luar keranjang). Dilewatkan lewat createOrderGroup dengan SATU item
+ * -- bukan lagi createOrder lama -- supaya beli-langsung juga bisa
+ * pakai kode voucher (field `voucher_code`, opsional) dan tetap
+ * konsisten dengan alur checkout keranjang. Baris `orders` yang
+ * dihasilkan tetap satu baris biasa (dengan order_group_id terisi),
+ * jadi redirect ke /orders/[id] di bawah tidak berubah.
  *
  * Untuk produk delivery_type='form', formData juga membawa jawaban
  * form dengan nama field `form_response__<label>` (lihat
  * ProductCard/FormAnswerDialog) -- dikumpulkan di sini jadi satu objek
- * sebelum diteruskan ke createOrder untuk divalidasi ulang di server.
+ * sebelum diteruskan untuk divalidasi ulang di server.
  */
 export async function startCheckout(
   _prevState: StartCheckoutState,
@@ -40,18 +45,31 @@ export async function startCheckout(
     }
   }
 
-  const { order, error } = await createOrder(
-    productId,
+  const voucherCodeRaw = formData.get("voucher_code");
+  const voucherCode =
+    typeof voucherCodeRaw === "string" && voucherCodeRaw.trim()
+      ? voucherCodeRaw.trim()
+      : undefined;
+
+  const { orders, error } = await createOrderGroup(
+    [
+      {
+        productId,
+        quantity: 1,
+        formResponses:
+          Object.keys(formResponses).length > 0 ? formResponses : undefined,
+      },
+    ],
     session.user.discordId,
     session.user.name ?? "Unknown",
-    formResponses
+    voucherCode
   );
 
-  if (error || !order) {
+  if (error || !orders || orders.length === 0) {
     return { error: error ?? "Gagal membuat order." };
   }
 
-  redirect(`/orders/${order.id}`);
+  redirect(`/orders/${orders[0].id}`);
 }
 
 /**
@@ -71,4 +89,24 @@ export async function pollOrderStatus(orderId: string) {
   }
 
   return syncOrderStatus(order);
+}
+
+/**
+ * Sama seperti pollOrderStatus tapi untuk order_group (checkout
+ * keranjang/multi-item) -- dipoll dari halaman /orders/group/[id].
+ */
+export async function pollOrderGroupStatus(orderGroupId: string) {
+  const session = await auth();
+  if (!session?.user?.discordId) {
+    throw new Error("Kamu harus login.");
+  }
+
+  const group = await getOwnedOrderGroup(orderGroupId, session.user.discordId);
+  if (!group) {
+    throw new Error("Order tidak ditemukan.");
+  }
+
+  const fresh = await syncOrderGroupStatus(group);
+  const orders = await getOrdersForGroup(orderGroupId);
+  return { group: fresh, orders };
 }

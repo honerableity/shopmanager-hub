@@ -23,6 +23,11 @@ export type Order = {
   created_at: string;
   paid_at: string | null;
   form_responses: Record<string, string> | null;
+  // Ditambahkan untuk fitur keranjang/voucher (lihat lib/order-groups.ts).
+  // Order lama (sebelum fitur ini ada) punya order_group_id = null dan
+  // discount_idr = 0 -- tetap tampil & berfungsi seperti sebelumnya.
+  order_group_id: string | null;
+  discount_idr: number;
 };
 
 /**

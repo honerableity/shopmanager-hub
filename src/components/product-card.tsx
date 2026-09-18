@@ -13,8 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { startCheckout, type StartCheckoutState } from "@/app/orders/actions";
-import { FormAnswerDialog } from "@/components/form-answer-dialog";
+import { addProductToCart, type AddToCartState } from "@/app/cart/actions";
+import { AddToCartButton } from "@/app/product/[id]/add-to-cart-button";
 import type { Product } from "@/lib/products";
 
 function formatRupiah(amount: number) {
@@ -25,7 +25,7 @@ function formatRupiah(amount: number) {
   }).format(amount);
 }
 
-const initialState: StartCheckoutState = {};
+const initialState: AddToCartState = {};
 
 /**
  * `ownedOrderId`: kalau produk ini unlimited (stock null) dan buyer
@@ -33,6 +33,11 @@ const initialState: StartCheckoutState = {};
  * itu -- tombol jadi "Buka File" mengarah ke `/orders/[id]` alih-alih
  * memicu order baru. Untuk produk stok terbatas, selalu undefined
  * (boleh beli berkali-kali) walau riwayat pembeliannya ada.
+ *
+ * Klik gambar/nama produk membuka halaman detail (`/product/[id]`,
+ * yang juga menampilkan review) -- tombol di card ini sendiri cuma
+ * jalan pintas "+ Keranjang" tanpa pindah halaman (lihat konfirmasi
+ * di lib/order-groups.ts terkait alur marketplace).
  */
 export function ProductCard({
   product,
@@ -45,42 +50,44 @@ export function ProductCard({
   const alreadyOwned = product.stock === null && Boolean(ownedOrderId);
 
   const [state, formAction, isPending] = useActionState(
-    startCheckout,
+    addProductToCart,
     initialState
   );
 
   return (
     <Card className="overflow-hidden pt-0 gap-3">
-      <div className="relative aspect-square w-full bg-muted">
-        {product.image_url ? (
-          <Image
-            src={product.image_url}
-            alt={product.name}
-            fill
-            unoptimized
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
-            Tidak ada gambar
-          </div>
-        )}
-        {isOutOfStock && (
-          <Badge variant="destructive" className="absolute top-2 right-2">
-            Stok habis
-          </Badge>
-        )}
-        {!isOutOfStock && product.stock !== null && product.stock <= 5 && (
-          <Badge variant="secondary" className="absolute top-2 right-2">
-            Sisa {product.stock}
-          </Badge>
-        )}
-      </div>
-      <CardHeader>
-        <CardTitle className="text-base leading-snug">
-          {product.name}
-        </CardTitle>
-      </CardHeader>
+      <Link href={`/product/${product.id}`} className="contents">
+        <div className="relative aspect-square w-full bg-muted">
+          {product.image_url ? (
+            <Image
+              src={product.image_url}
+              alt={product.name}
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
+              Tidak ada gambar
+            </div>
+          )}
+          {isOutOfStock && (
+            <Badge variant="destructive" className="absolute top-2 right-2">
+              Stok habis
+            </Badge>
+          )}
+          {!isOutOfStock && product.stock !== null && product.stock <= 5 && (
+            <Badge variant="secondary" className="absolute top-2 right-2">
+              Sisa {product.stock}
+            </Badge>
+          )}
+        </div>
+        <CardHeader>
+          <CardTitle className="text-base leading-snug">
+            {product.name}
+          </CardTitle>
+        </CardHeader>
+      </Link>
       <CardContent className="flex-1 space-y-1">
         {product.description && (
           <p className="text-sm text-muted-foreground line-clamp-2">
@@ -89,6 +96,9 @@ export function ProductCard({
         )}
         {state.error && (
           <p className="text-sm text-destructive">{state.error}</p>
+        )}
+        {state.success && (
+          <p className="text-sm text-green-500">Ditambahkan ke keranjang.</p>
         )}
       </CardContent>
       <CardFooter className="flex items-center justify-between gap-3">
@@ -99,17 +109,19 @@ export function ProductCard({
             <Link href={`/orders/${ownedOrderId}`}>Buka File</Link>
           </Button>
         ) : product.delivery_type === "form" ? (
-          <FormAnswerDialog
+          <AddToCartButton
             productId={product.id}
             productName={product.name}
             formSchema={product.form_schema}
+            isForm
             disabled={isOutOfStock}
           />
         ) : (
           <form action={formAction}>
             <input type="hidden" name="product_id" value={product.id} />
+            <input type="hidden" name="quantity" value={1} />
             <Button size="sm" type="submit" disabled={isOutOfStock || isPending}>
-              {isOutOfStock ? "Habis" : isPending ? "Memproses..." : "Beli"}
+              {isOutOfStock ? "Habis" : isPending ? "Menambahkan..." : "+ Keranjang"}
             </Button>
           </form>
         )}

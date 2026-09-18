@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ShoppingCart } from "lucide-react";
 
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,16 @@ export default async function ShopPage() {
                 <Link href="/admin/products">Kelola Produk</Link>
               </Button>
             )}
+            {userIsAdmin && (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin/vouchers">Kelola Voucher</Link>
+              </Button>
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link href="/cart">
+                <ShoppingCart />
+              </Link>
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/profile">Profil Saya</Link>
             </Button>
