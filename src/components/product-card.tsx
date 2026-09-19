@@ -30,10 +30,15 @@ function formatRupiah(amount: number) {
  * Card ini sengaja TIDAK punya jalan pintas "+ Keranjang" -- satu-
  * satunya cara menambahkan produk ke keranjang adalah lewat halaman
  * detail (`/product/[id]`), yang juga menampilkan deskripsi lengkap
- * dan review sebelum pembeli memutuskan. Seluruh card ini jadi satu
- * link besar ke halaman detail (kecuali tombol "Buka File" untuk
- * produk yang sudah dimiliki, yang memang bukan bagian dari alur
- * tambah-ke-keranjang).
+ * dan review sebelum pembeli memutuskan.
+ *
+ * Struktur: gambar + judul + deskripsi dibungkus SATU Link besar ke
+ * halaman detail. Footer harga ada DI LUAR Link itu (bukan di
+ * dalamnya) khusus supaya tombol "Buka File" (kalau alreadyOwned) bisa
+ * jadi Link terpisah ke tujuan lain -- dua <a> tidak boleh bersarang
+ * dalam HTML, dan menambahkan onClick/stopPropagation untuk akalinnya
+ * tidak bisa dipakai di sini karena komponen ini Server Component
+ * (event handler cuma boleh di Client Component).
  */
 export function ProductCard({
   product,
@@ -85,30 +90,26 @@ export function ProductCard({
             </p>
           )}
         </CardContent>
-        <CardFooter className="flex items-center justify-between gap-3">
-          <span className="font-semibold">
-            {formatRupiah(product.price_idr)}
-          </span>
-
-          {alreadyOwned ? (
-            <Button asChild size="sm" variant="secondary">
-              {/* Link bersarang ke tujuan berbeda dari Link pembungkus
-                  card -- stopPropagation supaya klik tombol ini tidak
-                  ikut men-trigger navigasi ke halaman detail. */}
-              <Link
-                href={`/orders/${ownedOrderId}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                Buka File
-              </Link>
-            </Button>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              {isOutOfStock ? "Stok habis" : "Lihat detail"}
-            </span>
-          )}
-        </CardFooter>
       </Link>
+
+      <CardFooter className="flex items-center justify-between gap-3">
+        <span className="font-semibold">
+          {formatRupiah(product.price_idr)}
+        </span>
+
+        {alreadyOwned ? (
+          <Button asChild size="sm" variant="secondary">
+            <Link href={`/orders/${ownedOrderId}`}>Buka File</Link>
+          </Button>
+        ) : (
+          <Link
+            href={`/product/${product.id}`}
+            className="text-xs text-muted-foreground hover:underline"
+          >
+            {isOutOfStock ? "Stok habis" : "Lihat detail"}
+          </Link>
+        )}
+      </CardFooter>
     </Card>
   );
 }
