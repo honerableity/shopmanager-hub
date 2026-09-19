@@ -208,6 +208,7 @@ export async function createOrder(
   // masih menunggu pembayaran) -- supaya order form/adminprocessed
   // bisa langsung diproses admin dari log ini.
   await logPurchaseToDiscord({
+    orderId: order.id,
     buyerUsername,
     buyerDiscordId,
     productName: product.name,

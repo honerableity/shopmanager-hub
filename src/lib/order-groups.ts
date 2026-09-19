@@ -292,6 +292,7 @@ export async function createOrderGroup(
     }
 
     await logPurchaseToDiscord({
+      orderId: orderRow.id,
       buyerUsername,
       buyerDiscordId,
       productName: item.name,

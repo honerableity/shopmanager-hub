@@ -26,6 +26,7 @@ const DELIVERY_TYPE_LABEL: Record<DeliveryType, string> = {
 };
 
 export async function logPurchaseToDiscord(params: {
+  orderId: string;
   buyerUsername: string;
   buyerDiscordId: string;
   productName: string;
@@ -37,6 +38,10 @@ export async function logPurchaseToDiscord(params: {
     `Id = ${params.buyerDiscordId}`,
     `product = ${params.productName}`,
     `Jenis = ${DELIVERY_TYPE_LABEL[params.deliveryType]}`,
+    // Order ID disertakan supaya admin bisa langsung cari & cabut
+    // (revoke) order ini lewat halaman /admin/moderation kalau perlu,
+    // tanpa perlu command atau tombol cabut di Discord itu sendiri.
+    `Order ID = ${params.orderId}`,
   ];
 
   // Khusus form: tambahkan value untuk tiap pertanyaan di formnya.

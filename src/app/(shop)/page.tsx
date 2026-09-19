@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
 
 import { auth } from "@/auth";
+import { AdminMenu } from "@/components/admin-menu";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/product-card";
 import {
@@ -42,21 +43,7 @@ export default async function ShopPage() {
             <span className="font-semibold">ShopManager</span>
           </div>
           <div className="flex items-center gap-3">
-            {userIsAdmin && (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/products">Kelola Produk</Link>
-              </Button>
-            )}
-            {userIsAdmin && (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/vouchers">Kelola Voucher</Link>
-              </Button>
-            )}
-            {userIsAdmin && (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/moderation">Moderasi</Link>
-              </Button>
-            )}
+            {userIsAdmin && <AdminMenu />}
             <Button asChild variant="outline" size="sm">
               <Link href="/cart">
                 <ShoppingCart />
