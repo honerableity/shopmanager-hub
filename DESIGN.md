@@ -88,3 +88,51 @@ Setiap halaman/action admin (`/admin/*`, `createProduct`, dst) HARUS
 cek `isAdmin()` di server (Server Component atau Server Action) --
 JANGAN cuma sembunyikan tombol di UI client, itu bisa dilewati dengan
 akses URL langsung.
+
+## Struktur folder: route group `(shop)`
+
+Semua halaman toko (shop page, cart, product, orders, profile,
+admin/*) ada di dalam `src/app/(shop)/` -- route group Next.js, TIDAK
+mengubah URL sama sekali (`(shop)/cart/page.tsx` tetap diakses di
+`/cart`). Cuma `/login` dan `/banned` yang di luar grup ini.
+
+Alasannya: `src/app/(shop)/layout.tsx` adalah tempat pengecekan ban
+akun Discord yang SESUNGGUHNYA (query ke Supabase) -- lihat bagian
+"Moderasi" di bawah. Kalau nambah halaman toko baru, taruh di dalam
+`(shop)/` supaya otomatis ikut terlindungi layout ini.
+
+## Moderasi: ban akun & revoke produk
+
+- **Ban akun Discord** (`banned_discord_users`, lihat
+  `supabase/006_moderation.sql` & `src/lib/moderation.ts`): akun yang
+  diban tidak bisa akses halaman toko manapun lagi (redirect ke
+  `/banned`, satu-satunya aksi di sana adalah logout) dan otomatis
+  dianggap logout dari sesi yang sedang aktif di navigasi berikutnya.
+  - Pengecekannya ADA DI DUA TEMPAT dengan alasan berbeda:
+    1. `src/app/(shop)/layout.tsx` -- query DB definitif, jalan sekali
+       per navigasi halaman. Ini yang benar-benar mem-block akses ke
+       semua halaman toko.
+    2. `src/proxy.ts` SENGAJA TIDAK query DB -- proxy jalan di setiap
+       request termasuk yang di-prefetch, dan dokumentasi Next.js
+       eksplisit bilang proxy cuma untuk "optimistic check" dari
+       cookie/token, bukan database, supaya tidak bikin masalah
+       performa. Proxy di sini cuma menegakkan "harus login".
+  - Server Actions (checkout, tambah ke keranjang, submit review) juga
+    punya pengecekan sendiri lewat `requireNotBanned()` di
+    `lib/moderation.ts` -- WAJIB, karena Server Action adalah endpoint
+    POST tersendiri yang bisa dipanggil langsung tanpa lewat halaman
+    (proxy/layout tidak otomatis melindunginya).
+  - Admin ban/unban lewat Discord ID manual di halaman
+    `/admin/moderation` (ShopManager tidak punya tabel `users`
+    terpusat atau pencarian username).
+
+- **Revoke produk**: order yang sudah `paid` bisa ditandai admin jadi
+  status `revoked` (lihat `revokeOrder` di `lib/moderation.ts`). Order
+  TIDAK dihapus (riwayat tetap ada), tapi:
+  - Tidak lagi dianggap "paid" oleh query manapun (halaman profil,
+    "Buka File" di shop) -- otomatis tersaring karena semua query itu
+    filter `.eq("status", "paid")`.
+  - `whitelist_entries` terkait ikut dihapus supaya akses Roblox (kalau
+    ada) ikut tercabut.
+  - Bisa dibatalkan (`unrevokeOrder`, balik jadi `paid`) dari halaman
+    `/admin/moderation` juga.

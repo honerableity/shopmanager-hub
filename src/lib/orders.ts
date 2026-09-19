@@ -18,7 +18,7 @@ export type Order = {
   qr_image: string | null;
   qr_string: string | null;
   expired_at: string;
-  status: "pending" | "paid" | "expired" | "failed";
+  status: "pending" | "paid" | "expired" | "failed" | "revoked";
   download_url: string | null;
   created_at: string;
   paid_at: string | null;
@@ -28,6 +28,12 @@ export type Order = {
   // discount_idr = 0 -- tetap tampil & berfungsi seperti sebelumnya.
   order_group_id: string | null;
   discount_idr: number;
+  // Diisi lewat fitur moderasi (lihat lib/moderation.ts::revokeOrder)
+  // saat admin mencabut akses pembeli ke produk yang sudah dibeli.
+  // null untuk order yang belum pernah dicabut.
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  revoked_by: string | null;
 };
 
 /**

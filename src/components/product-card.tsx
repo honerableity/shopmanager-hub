@@ -1,8 +1,5 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useActionState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,8 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { addProductToCart, type AddToCartState } from "@/app/cart/actions";
-import { AddToCartButton } from "@/app/product/[id]/add-to-cart-button";
 import type { Product } from "@/lib/products";
 
 function formatRupiah(amount: number) {
@@ -25,19 +20,20 @@ function formatRupiah(amount: number) {
   }).format(amount);
 }
 
-const initialState: AddToCartState = {};
-
 /**
  * `ownedOrderId`: kalau produk ini unlimited (stock null) dan buyer
  * yang login sudah pernah membelinya lunas, ini berisi id order lama
  * itu -- tombol jadi "Buka File" mengarah ke `/orders/[id]` alih-alih
- * memicu order baru. Untuk produk stok terbatas, selalu undefined
+ * ke halaman detail. Untuk produk stok terbatas, selalu undefined
  * (boleh beli berkali-kali) walau riwayat pembeliannya ada.
  *
- * Klik gambar/nama produk membuka halaman detail (`/product/[id]`,
- * yang juga menampilkan review) -- tombol di card ini sendiri cuma
- * jalan pintas "+ Keranjang" tanpa pindah halaman (lihat konfirmasi
- * di lib/order-groups.ts terkait alur marketplace).
+ * Card ini sengaja TIDAK punya jalan pintas "+ Keranjang" -- satu-
+ * satunya cara menambahkan produk ke keranjang adalah lewat halaman
+ * detail (`/product/[id]`), yang juga menampilkan deskripsi lengkap
+ * dan review sebelum pembeli memutuskan. Seluruh card ini jadi satu
+ * link besar ke halaman detail (kecuali tombol "Buka File" untuk
+ * produk yang sudah dimiliki, yang memang bukan bagian dari alur
+ * tambah-ke-keranjang).
  */
 export function ProductCard({
   product,
@@ -48,11 +44,6 @@ export function ProductCard({
 }) {
   const isOutOfStock = product.stock !== null && product.stock <= 0;
   const alreadyOwned = product.stock === null && Boolean(ownedOrderId);
-
-  const [state, formAction, isPending] = useActionState(
-    addProductToCart,
-    initialState
-  );
 
   return (
     <Card className="overflow-hidden pt-0 gap-3">
@@ -87,45 +78,37 @@ export function ProductCard({
             {product.name}
           </CardTitle>
         </CardHeader>
-      </Link>
-      <CardContent className="flex-1 space-y-1">
-        {product.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {product.description}
-          </p>
-        )}
-        {state.error && (
-          <p className="text-sm text-destructive">{state.error}</p>
-        )}
-        {state.success && (
-          <p className="text-sm text-green-500">Ditambahkan ke keranjang.</p>
-        )}
-      </CardContent>
-      <CardFooter className="flex items-center justify-between gap-3">
-        <span className="font-semibold">{formatRupiah(product.price_idr)}</span>
+        <CardContent className="flex-1 space-y-1">
+          {product.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {product.description}
+            </p>
+          )}
+        </CardContent>
+        <CardFooter className="flex items-center justify-between gap-3">
+          <span className="font-semibold">
+            {formatRupiah(product.price_idr)}
+          </span>
 
-        {alreadyOwned ? (
-          <Button asChild size="sm" variant="secondary">
-            <Link href={`/orders/${ownedOrderId}`}>Buka File</Link>
-          </Button>
-        ) : product.delivery_type === "form" ? (
-          <AddToCartButton
-            productId={product.id}
-            productName={product.name}
-            formSchema={product.form_schema}
-            isForm
-            disabled={isOutOfStock}
-          />
-        ) : (
-          <form action={formAction}>
-            <input type="hidden" name="product_id" value={product.id} />
-            <input type="hidden" name="quantity" value={1} />
-            <Button size="sm" type="submit" disabled={isOutOfStock || isPending}>
-              {isOutOfStock ? "Habis" : isPending ? "Menambahkan..." : "+ Keranjang"}
+          {alreadyOwned ? (
+            <Button asChild size="sm" variant="secondary">
+              {/* Link bersarang ke tujuan berbeda dari Link pembungkus
+                  card -- stopPropagation supaya klik tombol ini tidak
+                  ikut men-trigger navigasi ke halaman detail. */}
+              <Link
+                href={`/orders/${ownedOrderId}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                Buka File
+              </Link>
             </Button>
-          </form>
-        )}
-      </CardFooter>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {isOutOfStock ? "Stok habis" : "Lihat detail"}
+            </span>
+          )}
+        </CardFooter>
+      </Link>
     </Card>
   );
 }

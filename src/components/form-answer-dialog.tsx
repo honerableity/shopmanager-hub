@@ -2,7 +2,7 @@
 
 import { useActionState, useRef } from "react";
 
-import { startCheckout, type StartCheckoutState } from "@/app/orders/actions";
+import { startCheckout, type StartCheckoutState } from "@/app/(shop)/orders/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
